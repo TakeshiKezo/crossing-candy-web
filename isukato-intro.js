@@ -1,4 +1,5 @@
-/* Isukato Games – Start-Intro "Blütenwirbel" (Sakura-Kitsune, gerendert in Blender: intro/fuchs/kitsune_anim.py --anim B).
+/* Isukato Games – Start-Intro "Blütenwirbel" (Sakura-Kitsune, gerendert in Blender: intro/fuchs/kitsune_anim.py --anim B --fps60,
+   kodiert mit intro/fuchs/encode60.sh: 60 fps, runde Blende eingebrannt).
    Einbinden als ERSTES im <body>:  <script src="isukato-intro.js"></script>   (Video daneben: isukato-intro.mp4)
    - nur beim Kaltstart (einmal pro Sitzung), Antippen überspringt, "Bewegung reduzieren" überspringt ganz
    - kann das Video nicht starten (z. B. Stromsparmodus), verschwindet das Intro sofort */
@@ -17,8 +18,8 @@
     '#isu-intro{position:fixed;inset:0;z-index:2147483647;background:#07080c;display:flex;align-items:center;justify-content:center;' +
     'transition:opacity .45s ease;-webkit-tap-highlight-color:transparent;cursor:pointer}' +
     '#isu-intro.aus{opacity:0;pointer-events:none}' +
-    '#isu-intro video{width:min(100vw,100vh);height:min(100vw,100vh);object-fit:contain;pointer-events:none;' +
-    '-webkit-mask-image:radial-gradient(circle at 50% 50%,#000 58%,transparent 71%);mask-image:radial-gradient(circle at 50% 50%,#000 58%,transparent 71%)}' +
+    // runde Blende ist ins Video eingebrannt (keine CSS-Maske mehr – die kostete auf Handys bei jedem Bild Leistung)
+    '#isu-intro video{width:min(100vw,100vh);height:min(100vw,100vh);object-fit:contain;pointer-events:none}' +
     '#isu-intro span{position:absolute;left:0;right:0;bottom:calc(22px + env(safe-area-inset-bottom,0px));text-align:center;' +
     'font:600 11px/1 system-ui,Roboto,sans-serif;letter-spacing:.18em;color:#5d6270;opacity:0;transition:opacity .4s .9s}' +
     '#isu-intro.an span{opacity:1}';

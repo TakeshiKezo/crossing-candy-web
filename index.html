@@ -394,6 +394,7 @@ body:not([data-s="menu"]) #bestChip{display:none}
   <symbol id="g-gift" viewBox="0 0 24 24"><rect x="4.2" y="10.6" width="15.6" height="9.8" rx="2"/><path d="M3.2 7.4h17.6v3.2H3.2zM12 7.4v13"/><path d="M12 7.4C10.9 4.5 7.1 4.1 7.1 6.2c0 1.2 2.3 1.2 4.9 1.2zM12 7.4c1.1-2.9 4.9-3.3 4.9-1.2 0 1.2-2.3 1.2-4.9 1.2z"/></symbol>
   <symbol id="g-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M12 7.8V12l2.8 1.8"/></symbol>
   <symbol id="g-lock" viewBox="0 0 24 24"><rect x="5" y="10.4" width="14" height="10.2" rx="3"/><path d="M8.5 10.4V8.2a3.5 3.5 0 0 1 7 0v2.2"/></symbol>
+  <symbol id="g-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2"/><path d="M3.8 12h16.4M12 3.8c2.4 2.3 3.6 5 3.6 8.2s-1.2 5.9-3.6 8.2c-2.4-2.3-3.6-5-3.6-8.2s1.2-5.9 3.6-8.2z"/></symbol>
   <symbol id="g-check" viewBox="0 0 24 24"><path d="M5 12.6l4.3 4.2L19 7.2"/></symbol>
   <symbol id="g-share" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M5 12.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.5"/></symbol>
   <symbol id="g-sound" viewBox="0 0 24 24"><path d="M4.6 9.6h3.1l4.5-3.7v12.2l-4.5-3.7H4.6z" fill="currentColor"/><path d="M15.8 9.2a4 4 0 0 1 0 5.6M18.4 6.6a7.6 7.6 0 0 1 0 10.8"/></symbol>
@@ -540,6 +541,7 @@ body:not([data-s="menu"]) #bestChip{display:none}
       <div class="set"><span class="si"><svg class="g"><use href="#g-sound"/></svg></span><span class="tx"><b>Ton</b><small>Sprünge, Bonbons und Effekte</small></span><button class="tog" id="tSound" role="switch" aria-checked="true" aria-label="Ton"></button></div>
       <div class="set"><span class="si"><svg class="g"><use href="#g-vibrate"/></svg></span><span class="tx"><b>Vibration</b><small>Auf Android-Geräten</small></span><button class="tog" id="tVib" role="switch" aria-checked="true" aria-label="Vibration"></button></div>
       <div class="set"><span class="si"><svg class="g"><use href="#g-sparkle"/></svg></span><span class="tx"><b>Grafik</b><small>„Flüssig“ spart Akku</small></span><div class="seg" role="group" aria-label="Grafik"><button id="qHigh" aria-pressed="true">Schön</button><button id="qLow" aria-pressed="false">Flüssig</button></div></div>
+      <div class="set"><span class="si"><svg class="g"><use href="#g-globe"/></svg></span><span class="tx"><b>Sprache</b><small>Deutsch · English</small></span><div class="seg" role="group" aria-label="Sprache"><button id="lDe" aria-pressed="false">DE</button><button id="lEn" aria-pressed="false">EN</button></div></div>
       <div class="set hidden" id="privacyRow"><span class="si"><svg class="g"><use href="#g-lock"/></svg></span><span class="tx"><b>Datenschutz</b><small>Einwilligung für Werbung ändern</small></span><button class="mini" id="privacyBtn">Ändern</button></div>
       <p class="fine">Dein Fortschritt wird nur auf diesem Gerät gespeichert.</p>
     </div>
@@ -586,6 +588,52 @@ const smooth=t=>{t=clamp(t,0,1);return t*t*(3-2*t);};
 const damp=(rate,dt)=>1-Math.exp(-rate*dt);
 const REDUCED=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){return false;}})();
 
+/* ---------- Sprache (Deutsch / Englisch) ---------- */
+const LANG=(()=>{try{const v=localStorage.getItem('cc_lang');if(v==='de'||v==='en')return v;}catch(e){}
+  const l=((navigator.languages&&navigator.languages[0])||navigator.language||'de').toLowerCase();return l.startsWith('de')?'de':'en';})();
+const EN_={"Spielfeld":"Game board","Rekord":"Best","Menü":"Menu","Aufgaben":"Quests","Optionen":"Options","Ergebnis":"Result","Hüpf durch den Zuckertraum":"Hop through the sugar dream","Testrunde":"Trial run","Tippen zum Hüpfen":"Tap to hop","Felder geschafft":"tiles crossed","Neuer Rekord":"New record!","Bonbons":"Candies","Beste Kombo":"Best combo","Weiterspielen":"Continue","Video ansehen":"Watch video","Rekord teilen":"Share record","Nochmal":"Play again","Teilen":"Share","In welchem Jahr bist du geboren?":"What year were you born?","Damit wir dir passende Werbung zeigen können.":"So we can show you suitable ads.","Geburtsjahr":"Year of birth","Jahr wählen":"Choose year","Weiter":"Continue","Wir speichern nur, ob du jünger als 13 bist – sonst nichts.":"We only store whether you are under 13 – nothing else.","Neu starten":"Restart","Hauptmenü":"Main menu","Schließen":"Close","Überraschungs-Automat":"Surprise Machine","Zieh eine zufällige Figur. Doppelte geben 20 Bonbons zurück.":"Draw a random character. Duplicates give back 20 candies.","Normal 55 %":"Common 55%","Selten 28 %":"Rare 28%","Episch 13 %":"Epic 13%","Legendär 4 %":"Legendary 4%","Ziehen":"Draw","Geschenk":"Gift","Bereit":"Ready","Sammlung":"Collection","Jetzt öffnen":"Open now","Ton":"Sound","Sprünge, Bonbons und Effekte":"Hops, candies and effects","Auf Android-Geräten":"On supported devices","Grafik":"Graphics","„Flüssig“ spart Akku":"“Smooth” saves battery","Schön":"Pretty","Flüssig":"Smooth","Datenschutz":"Privacy","Einwilligung für Werbung ändern":"Change ad consent","Ändern":"Change","Sprache":"Language","Dein Fortschritt wird nur auf diesem Gerät gespeichert.":"Your progress is only saved on this device.","Neue Figur":"New character","Auswählen":"Select","Gewählt":"Selected","Testen":"Try","Geheim":"Secret","Werbung":"Ad","Werbevideo":"Ad video","Hier läuft in der fertigen App ein Werbevideo.":"In the app, an ad video plays here.","Bitte warten":"Please wait","Belohnung abholen":"Claim reward","Video wird geladen …":"Loading video …","Gerade ist kein Video verfügbar":"No video available right now","Video abgebrochen, keine Belohnung":"Video cancelled – no reward","Kurze Werbung":"Short ad","Schau bis zum Ende für deine Belohnung":"Watch to the end for your reward","Geheime Figur entdeckt":"Secret character found!","Schon in deiner Sammlung":"Already in your collection","Aufgabe geschafft":"Quest complete!","Abgeholt":"Claimed","Abholen":"Claim","sammeln":"more","Knapp!":"Close call!","Weiter geht’s":"Here we go!","Erwischt":"Caught","Sparmodus an: Das Spiel läuft so flüssiger":"Power saving on: the game runs smoother","Nur auf deine Farbe hüpfen":"Only hop on your color","Link kopiert – jetzt einfügen und teilen":"Link copied – paste it to share","Mit Freunden teilen":"Share with friends","Das Spiel konnte nicht geladen werden. Bitte starte die App neu.":"The game could not be loaded. Please restart the app.","Dein Gerät unterstützt die 3D-Grafik dieses Spiels leider nicht.":"Sorry, your device does not support the 3D graphics of this game.","Vom Donut überrollt":"Run over by a donut","Von der Kaugummikugel erwischt":"Caught by a gumball","Von der Waffel abgetrieben":"Drifted off on a waffle","Falsche Farbe auf dem Wackelpudding":"Wrong color on the jelly","Zu lange getrödelt und aufgewacht":"Dawdled too long and woke up","Erdbeere":"Strawberry","Minze":"Mint","Zitrone":"Lemon","Start":"Starter","Normal":"Common","Selten":"Rare","Episch":"Epic","Legendär":"Legendary","Bonbon-Wiese":"Candy Meadow","Morgensonne über Zuckerwiesen":"Morning sun over sugar meadows","Schokolade":"Chocolate","Eisland":"Ice Land","Blaubeersirup und Schneegestöber":"Blueberry syrup and snow flurries","Blaubeersirup":"Blueberry syrup","Schoko-Vulkan":"Choco Volcano","Karamell-Lava im Abendrot":"Caramel lava at sunset","Karamell-Lava":"Caramel lava","Lakritz-Weltall":"Licorice Space","Sternensirup unter Lakritzhimmel":"Star syrup under a licorice sky","Sternensirup":"Star syrup","Sternennacht: Kometa lässt es dunkel werden":"Starry night: Kometa brings the dark","Eiswasser":"Ice water","Winterzauber: Kristalla bringt Schnee":"Winter magic: Kristalla brings snow","Erdbeer-Limonade":"Strawberry lemonade","Sommerfest: Melonia bringt die Sonne":"Summer party: Melonia brings the sun","Zaubertrank":"Magic potion","Geisterstunde: Buh spukt herum":"Witching hour: Boo is haunting","Regenbogensirup":"Rainbow syrup","Regenbogenland: Glitzi malt alles bunt":"Rainbow land: Glitzi paints everything","Wölkchen":"Cloudy","König Bonbo":"King Bonbo","Lakritz-Ninja":"Licorice Ninja","Eisi":"Icy","Keksi":"Cookie","Zucki":"Sugar","Bärli":"Teddy","Rosi":"Rosie","Schnecki":"Swirly","Quaki":"Croaky","Blubbi":"Bubbly","Bimmel":"Jingle","Quietschi":"Squeaky","Wabbel":"Wobbly","Zisch":"Fizz","Buh":"Boo","Ein Erdbeer-Mochi. Weich, süß und immer gut gelaunt.":"A strawberry mochi. Soft, sweet and always cheerful.","Flauschiges Marshmallow mit Röstkruste.":"A fluffy marshmallow with a toasted crust.","Edle Praline mit farbigem Topping.":"A fine praline with a colorful topping.","Schnell, schwarz, mit Stirnband.":"Fast, black, with a headband.","Eiskugel in der Waffel, mit Kirsche.":"A scoop of ice cream in a cone, with a cherry.","Zuckerwatte am Stiel. Federleicht.":"Cotton candy on a stick. Light as a feather.","Bonbo mit goldener Krone. Nur für Profis.":"Bonbo with a golden crown. Pros only.","Knuspriger Schokokeks mit Zuckerguss.":"A crunchy chocolate cookie with icing.","Ein glitzernder Würfelzucker.":"A sparkling sugar cube.","Ein Lolli, der selbst hüpft.":"A lollipop that hops all by itself.","Ein Gummibärchen, das nach jedem Sprung kurz nachzählt, ob noch beide Ohren dran sind.":"A gummy bear that checks after every hop whether both ears are still there.","Ein Karamellwürfel im Bonbonpapier. Bleibt an keinem Hindernis kleben, meistens jedenfalls.":"A caramel cube in a candy wrapper. Never sticks to obstacles – well, mostly.","Ein Schokomuffin im Förmchen. Hüpft vorsichtig, damit keine Krümel verloren gehen.":"A chocolate muffin in its paper cup. Hops carefully so no crumbs get lost.","Marzipanschweinchen und Glücksbringerin. Das Ringelschwänzchen ist echt.":"A marzipan piglet and lucky charm. The curly tail is real.","Eine Lakritzschnecke, die viel schneller ist, als ihr Name vermuten lässt.":"A licorice swirl that is much faster than it looks.","Ein feines Macaron aus der Konditorei. Trägt seine Füßchen mit Stolz.":"A fine macaron from the patisserie. Wears its little feet with pride.","Ein Weingummi-Frosch. Quakt bei jedem Sprung, ob du willst oder nicht.":"A gummy frog. Croaks on every hop, whether you like it or not.","Kaugummi mit Dauerblase. Wenn sie platzt, war es nicht Blubbis Schuld.":"Bubble gum with a never-ending bubble. If it pops, it wasn’t Bubbly’s fault.","Eine Bonbondose auf Beinen. Scheppert beim Landen wie ein ganzer Süßwarenladen.":"A candy tin on legs. Rattles like a whole sweet shop when it lands.","Ein Zuckerglöckchen. Klingelt bei jedem Hüpfer, der Weihnachtsmann hat schon nachgefragt.":"A little sugar bell. Rings with every hop – Santa has already asked about it.","Eine Schaumzucker-Ente. Quietscht wie ein Badeentchen, schmeckt aber besser.":"A marshmallow duck. Squeaks like a rubber duck, but tastes better.","Eine Kaugummikugel, die lieber rollt als hüpft. Mit dem Kaugummi-Zug nur entfernt verwandt.":"A gumball that would rather roll than hop. Only distantly related to the gumball train.","Ein Schmetterling aus Esspapier. Flattert über alles, nur nicht über Sirup.":"A butterfly made of wafer paper. Flutters over everything except syrup.","Ein Wackelpudding mit Sahnehaube. Watschelt, weil richtiges Hüpfen zu sehr wackelt.":"A jelly with a whipped cream top. Waddles, because real hopping is far too wobbly.","Ein Brausestäbchen voller Kribbeln. Springt nicht, sondern beamt sich von Feld zu Feld.":"A fizzy stick full of tingles. Doesn’t jump – it beams itself from tile to tile.","Eine Sternschnuppe aus Brausezucker. Wo sie hinhüpft, wird es Nacht und alle Lollis leuchten.":"A shooting star made of fizzy sugar. Wherever she hops, night falls and all lollipops glow.","Sternenstaub: sammelt Bonbons auf den beiden Nachbarfeldern mit ein.":"Stardust: also collects candies on both neighboring tiles.","Ein Eiskristall-Bonbon mit Schneemütze. Bringt den Winter mit, egal in welche Welt.":"An ice crystal candy with a snow cap. Brings winter to any world.","Frostig: Wackelpudding wechselt die Farbe 20 % langsamer.":"Frosty: jelly changes color 20% slower.","Ein Wassermelonen-Gummi in Sommerlaune. Spuckt keine Kerne, versprochen.":"A watermelon gummy in a summer mood. Doesn’t spit seeds, promise.","Erfrischt: Das Kombo-Zeitfenster ist etwas länger (0,7 statt 0,55 Sekunden).":"Refreshed: the combo window is a bit longer (0.7 instead of 0.55 seconds).","Ein Gespenst aus Schaumzucker. Erschreckt niemanden, erschrickt aber selbst ziemlich leicht.":"A marshmallow ghost. Scares nobody, but gets scared quite easily.","Wer dreimal auf der Strecke einschläft, bekommt nachts Besuch …":"Fall asleep on the track three times and you’ll get a visitor at night …","Spukgespür: Der Kaugummi-Zug wird 0,4 Sekunden früher angekündigt.":"Spooky sense: the gumball train is announced 0.4 seconds earlier.","Ein Einhorn-Lolli, der Regenbögen liebt und Langeweile nicht kennt.":"A unicorn lollipop that loves rainbows and never gets bored.","Sammle in einer einzigen Runde 8 Farbtropfen.":"Collect 8 color drops in a single run.","Glitzerregen: Jeder Farbtropfen gibt zusätzlich 1 Bonbon.":"Glitter rain: every color drop gives 1 extra candy.","Hüpf mit durch die Zuckerwelt!":"Hop through the sugar world with me!","Kannst du mich schlagen?":"Can you beat me?","Kostenlos bei Google Play":"Free on Google Play","Hüpf mit mir durch die Zuckerwelt von Crossing Candy!":"Hop with me through the sugar world of Crossing Candy!"};
+const PAT_=[[/^Welt (\d+)$/,"World $1"],
+[/^\+(\d+) Bonbons$/,"+$1 candies"],
+[/^Kombo ×(\d+)\s+\+1 Bonbon$/,"Combo ×$1  +1 candy"],
+[/^Neue Aufgaben in (.+)$/,"New quests in $1"],
+[/^Noch (\d+) Bonbons sammeln$/,"Collect $1 more candies"],
+[/^Noch (\d+)$/,"Collect $1"],
+[/^(\d+) Bonbons gehen zurück auf dein Konto\.$/,"$1 candies go back to your account."],
+[/^Schaffe (\d+) Felder in einer Runde$/,"Cross $1 tiles in one run"],
+[/^Sammle (\d+) Bonbons auf der Strecke$/,"Collect $1 candies on the track"],
+[/^Hüpf (\d+)-mal auf Wackelpudding$/,"Hop on jelly $1 times"],
+[/^Reite (\d+)-mal auf einer Waffel$/,"Ride a waffle $1 times"],
+[/^Schaffe eine Kombo von (\d+)$/,"Reach a combo of $1"],
+[/^Spiele (\d+) Runden$/,"Play $1 runs"],
+[/^Weiche (\d+)-mal knapp aus$/,"Have $1 close calls"],
+[/^Sammle (\d+) Farbtropfen$/,"Collect $1 color drops"],
+[/^In (.+) versunken$/,(m, a) => 'Sank into the ' + T(a).toLowerCase()],
+[/^Geheime Figur entdeckt: (.+)$/,(m, a) => 'Secret character found: ' + T(a)],
+[/^Testrunde mit (.+) beendet\. Gewinne die Figur im Überraschungs-Automaten\.$/,(m, a) => 'Trial run with ' + T(a) + ' is over. Win this character in the Surprise Machine.']];
+function T(t){
+  if(LANG==='de'||t==null)return t;
+  const k=String(t),tr=k.trim();if(!tr||!/[A-Za-zÄÖÜäöü]/.test(tr))return k;
+  let r=EN_[tr];
+  if(r===undefined){for(const [re,to] of PAT_){if(re.test(tr)){r=tr.replace(re,to);break;}}}
+  if(r===undefined)return k;
+  return k.slice(0,k.indexOf(tr))+r+k.slice(k.indexOf(tr)+tr.length);
+}
+// übersetzt Textknoten und Beschriftungen; neue/geänderte Knoten über einen Beobachter
+function i18nNode(n){
+  if(n.nodeType===3){const v=n.nodeValue,t=T(v);if(t!==v)n.nodeValue=t;return;}
+  if(n.nodeType!==1||n.tagName==='SCRIPT'||n.tagName==='STYLE'||n.id==='isu-intro')return;
+  for(const a of ['aria-label','title','alt','placeholder']){const v=n.getAttribute(a);if(v){const t=T(v);if(t!==v)n.setAttribute(a,t);}}
+  for(let c=n.firstChild;c;c=c.nextSibling)i18nNode(c);
+}
+if(LANG!=='de'){
+  document.documentElement.lang='en';
+  i18nNode(document.body);
+  new MutationObserver(ms=>{for(const m of ms){
+    if(m.type==='characterData')i18nNode(m.target);
+    else if(m.type==='attributes')i18nNode(m.target);
+    else m.addedNodes.forEach(i18nNode);
+  }}).observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['aria-label','title','alt']});
+}
 if(typeof THREE==='undefined'){fatal('Das Spiel konnte nicht geladen werden. Bitte starte die App neu.');return;}
 function fatal(msg){const d=document.createElement('div');d.id='fatal';d.textContent=msg;document.body.appendChild(d);}
 
@@ -594,6 +642,8 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:v;}c
 const SET={sound:true,vib:true,q:'high'};
 try{Object.assign(SET,JSON.parse(store.get('cc_set','{}'))||{});}catch(e){}
 const saveSet=()=>store.set('cc_set',JSON.stringify(SET));
+$('lDe').setAttribute('aria-pressed',LANG==='de');$('lEn').setAttribute('aria-pressed',LANG==='en');
+for(const [id,l] of [['lDe','de'],['lEn','en']])$(id).addEventListener('click',()=>{if(l===LANG)return;store.set('cc_lang',l);location.reload();});
 document.body.classList.toggle('low',SET.q==='low');
 
 /* ---------- Inhalte ---------- */
@@ -2124,18 +2174,18 @@ async function shareImage(sc){
   try{const s=skinById(skinId),M=newFlavorMats(flavor),o=s.build(M);o.rotation.y=0.25;
     const im=await loadImg(renderIcon(o,{size:300,dir:[0.4,0.32,-1],pad:1.02}));disposeMats(M);x.drawImage(im,N/2-310,290,620,620);}catch(e){}
   x.textAlign='center';x.fillStyle='#7A2E45';x.font='800 64px Figtree, system-ui, sans-serif';
-  x.fillText(sc>0?sc+' Felder geschafft!':'Hüpf mit durch die Zuckerwelt!',N/2,920);
-  x.font='700 44px Figtree, system-ui, sans-serif';x.fillStyle='#B1475F';x.fillText('Kannst du mich schlagen?',N/2,990);
-  x.font='600 30px Figtree, system-ui, sans-serif';x.fillStyle='#9C6070';x.fillText('Kostenlos bei Google Play',N/2,1045);
+  x.fillText(sc>0?(LANG==='de'?sc+' Felder geschafft!':sc+' tiles crossed!'):T('Hüpf mit durch die Zuckerwelt!'),N/2,920);
+  x.font='700 44px Figtree, system-ui, sans-serif';x.fillStyle='#B1475F';x.fillText(T('Kannst du mich schlagen?'),N/2,990);
+  x.font='600 30px Figtree, system-ui, sans-serif';x.fillStyle='#9C6070';x.fillText(T('Kostenlos bei Google Play'),N/2,1045);
   return c.toDataURL('image/png');
 }
 async function shareScore(sc){
-  const text=sc>0?'Ich habe in Crossing Candy '+sc+' Felder geschafft! Schaffst du mehr?':'Hüpf mit mir durch die Zuckerwelt von Crossing Candy!';
+  const text=sc>0?(LANG==='de'?'Ich habe in Crossing Candy '+sc+' Felder geschafft! Schaffst du mehr?':'I crossed '+sc+' tiles in Crossing Candy! Can you beat that?'):T('Hüpf mit mir durch die Zuckerwelt von Crossing Candy!');
   let img=null;try{img=await shareImage(sc);}catch(e){}
   try{
     if(NATIVE){const Sh=plug('Share'),FSy=plug('Filesystem');
       let files;if(img&&FSy){try{const r=await FSy.writeFile({path:'crossing-candy-rekord.png',data:img.split(',')[1],directory:'CACHE'});files=[r.uri];}catch(e){}}
-      if(Sh){await Sh.share({title:'Crossing Candy',text:text+' '+STORE_URL,files,dialogTitle:'Mit Freunden teilen'});return;}}
+      if(Sh){await Sh.share({title:'Crossing Candy',text:text+' '+STORE_URL,files,dialogTitle:T('Mit Freunden teilen')});return;}}
     if(img&&navigator.canShare){const f=new File([await (await fetch(img)).blob()],'crossing-candy-rekord.png',{type:'image/png'});
       if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Crossing Candy',text:text+' '+STORE_URL});return;}}
     if(navigator.share){await navigator.share({title:'Crossing Candy',text:text+' '+STORE_URL});return;}
@@ -2462,7 +2512,7 @@ function showReveal(s,isNew){
   $('revImg').src=skinIcon(s)||'';$('revImg').alt=s.name;$('revName').textContent=s.name;
   const rr=$('revRar');rr.textContent=RAR_NAME[s.rar];rr.className='rar '+s.rar;
   $('revTop').textContent=isNew?(s.rar==='geheim'?'Geheime Figur entdeckt':'Neue Figur'):'Schon in deiner Sammlung';
-  $('revMsg').textContent=isNew?s.desc+(s.perkText?' '+s.perkText:''):DUPE_REFUND+' Bonbons gehen zurück auf dein Konto.';
+  $('revMsg').textContent=isNew?T(s.desc)+(s.perkText?' '+T(s.perkText):''):DUPE_REFUND+' Bonbons gehen zurück auf dein Konto.';
   $('revSel').classList.toggle('hidden',s.id===skinId&&!trial);
   $('revSel').onclick=()=>{skinId=s.id;trial=null;saveAll();applySkin(skinId);closeReveal();};
   if(REDUCED){R.classList.add('show');if(isNew)revealSound(s);return;}
@@ -2811,8 +2861,12 @@ function perfCheck(raw){
   if(fps<40&&SET.q==='high'){setQuality('low');SET.qAuto=true;toast('Sparmodus an: Das Spiel läuft so flüssiger','mint','g-sparkle');}
   saveSet();
 }
+// Solange das Isukato-Intro deckend davor liegt, wird nichts gezeichnet: die Grafik gehört dann ganz dem Video (flüssige 60 fps)
+let introEl=document.getElementById('isu-intro');
+const introCovers=()=>{if(!introEl)return false;if(!introEl.isConnected||introEl.classList.contains('aus')){introEl=null;return false;}return true;};
 function frame(now){
   if(!TEST||!TEST.manual)requestAnimationFrame(frame);
+  if(introCovers()){last=now;return;}
   const raw=Math.max(0,(now-last)/1000);if(!TEST)perfCheck(Math.min(raw,0.5));
   const rdt=Math.min(0.05,raw);last=now;
   let dt=state==='pause'?0:rdt;
