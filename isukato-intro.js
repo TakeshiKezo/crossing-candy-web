@@ -49,11 +49,18 @@
     el.classList.add('aus');
     setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
   }
+  // Ist das Spiel nach dem Video noch nicht fertig geladen (alte/erste Starts: Grafik-Programme werden gebaut), bleibt das
+  // letzte Bild mit Ladekreis stehen, statt ein leeres Menü zu zeigen. Antippen überspringt weiterhin sofort.
+  function endeWennBereit() {
+    var cc = window.CrossingCandy;
+    if (cc && cc.ready && !cc.isReady) { cc.ready.then(ende); setTimeout(ende, 20000); }
+    else ende();
+  }
   el.addEventListener('click', ende);
   el.addEventListener('touchstart', ende, { passive: true });
-  v.addEventListener('ended', ende);
+  v.addEventListener('ended', endeWennBereit);
   v.addEventListener('error', ende);
-  setTimeout(ende, 7000);  // Sicherheitsnetz
+  setTimeout(endeWennBereit, 7000);  // Sicherheitsnetz
   var p = v.play();
   if (p && p.catch) p.catch(ende);
   requestAnimationFrame(function () { el.classList.add('an'); });

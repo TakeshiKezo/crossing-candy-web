@@ -740,10 +740,12 @@ const plight=new THREE.PointLight(0xffd9a8,0,7,2); scene.add(plight);
 function applyShadowQuality(){
   // „lite“ = automatische dritte Stufe für alte Geräte: keine Schatten (spart den ganzen Schattenpass) und weniger Pixel
   const lite=SET.q==='low'&&!!SET.lite;
+  // „mid“ = automatische Zwischenstufe in „Hoch“: 1,5-fache statt 2-fache Auflösung, mittlere Schatten (kein Neu-Übersetzen nötig)
+  const mid=SET.q==='high'&&!!SET.mid;
   sun.castShadow=!lite;
-  const s=SET.q==='low'?768:2048;
+  const s=SET.q==='low'?768:mid?1536:2048;
   if(sun.shadow.mapSize.x!==s){sun.shadow.mapSize.set(s,s); if(sun.shadow.map){sun.shadow.map.dispose(); sun.shadow.map=null;}}
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, lite?0.85:SET.q==='low'?1:2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, lite?0.85:SET.q==='low'?1:mid?1.5:2));
 }
 applyShadowQuality();
 
@@ -2804,7 +2806,7 @@ $('tMusic').addEventListener('click',()=>{SET.music=SET.music===false;saveSet();
 // Farben und Symbole werden beim Laden gebaut – darum kurz neu laden (Fortschritt bleibt erhalten)
 $('tCb').addEventListener('click',()=>{SET.cb=!SET.cb;saveSet();renderSettings();setTimeout(()=>location.reload(),250);});
 if(IOS){const vr=$('tVib').closest('.set');if(vr)vr.classList.add('hidden');}
-function setQuality(q,auto){SET.q=q;SET.qChecked=true;if(!auto){SET.lite=false;SET.qManual=true;}saveSet();document.body.classList.toggle('low',q==='low');applyShadowQuality();resize();renderSettings();}
+function setQuality(q,auto){SET.q=q;SET.qChecked=true;if(!auto){SET.lite=false;SET.mid=false;SET.qManual=true;}saveSet();document.body.classList.toggle('low',q==='low');applyShadowQuality();resize();renderSettings();}
 $('qHigh').addEventListener('click',()=>setQuality('high'));
 $('qLow').addEventListener('click',()=>setQuality('low'));
 $('privacyBtn').addEventListener('click',()=>{if(AdMob)quiet(AdMob.showPrivacyOptionsForm());});
@@ -3024,25 +3026,32 @@ let last=performance.now();
 // Leistungsprüfung: läuft laufend im Menü und im Spiel (vorher nur einmal ganz am Anfang im Menü).
 // Ruckelt es, wird stufenweise heruntergeschaltet: hoch -> Sparmodus (<40 fps) -> ohne Schatten (<26 fps). Nie automatisch hoch.
 // Hat der Spieler die Qualität selbst gewählt, wird nur noch die Schatten-Stufe automatisch zugeschaltet, wenn es wirklich ruckelt.
-const PERF={n:0,sum:0,t:0,want:null};
+const PERF={n:0,sum:0,t:0,want:null,first:!SET.boots};
+SET.boots=(SET.boots||0)+1;saveSet();
 function perfApply(){
   const w=PERF.want;PERF.want=null;PERF.t=0;PERF.n=0;PERF.sum=0;
-  if(w==='low'&&SET.q==='high'){setQuality('low',true);SET.qAuto=true;saveSet();toast('Sparmodus an: Das Spiel läuft so flüssiger','mint','g-sparkle');}
+  if(w==='mid'&&SET.q==='high'&&!SET.mid){SET.mid=true;SET.qAuto=true;saveSet();applyShadowQuality();resize();}
+  else if(w==='low'&&SET.q==='high'){setQuality('low',true);SET.qAuto=true;saveSet();toast('Sparmodus an: Das Spiel läuft so flüssiger','mint','g-sparkle');}
   else if(w==='lite'&&SET.q==='low'&&!SET.lite){SET.lite=true;SET.qAuto=true;saveSet();applyShadowQuality();resize();toast('Ohne Schatten: läuft so flüssiger','mint','g-sparkle');}
 }
 function perfCheck(raw){
   // Umschalten baut die Grafik-Programme neu (kurzer Hänger) – daher nie mitten im Lauf, sondern im Menü, beim Warten auf den ersten Sprung oder nach dem Tod
-  if(PERF.want&&(state!=='play'||dead)){perfApply();return;}
+  if(PERF.want==='lite'&&(state!=='play'||dead)){perfApply();return;}
   if((state!=='menu'&&state!=='play')||dead||document.hidden||raw>0.5){PERF.t=0;PERF.n=0;PERF.sum=0;return;}
-  PERF.t+=raw;if(PERF.t<1.5)return;                     // nach Start/Umschalten erst einschwingen lassen
+  // nach Start/Umschalten erst einschwingen lassen; beim allerersten Start länger (dann baut das Gerät noch Grafik-Programme)
+  PERF.t+=raw;if(PERF.t<(PERF.first?6:1.5))return;
   PERF.n++;PERF.sum+=raw;if(PERF.n<90&&PERF.sum<3)return;   // 90 Bilder oder 3 s, damit langsame Geräte nicht ewig warten
-  const fps=PERF.n/PERF.sum;PERF.t=0;PERF.n=0;PERF.sum=0;SET.fps=Math.round(fps);
-  if(SET.q==='high'&&fps<40&&!SET.qManual)PERF.want='low';
-  else if(SET.q==='low'&&!SET.lite&&fps<26)PERF.want='lite';
-  if(PERF.want&&state!=='play')perfApply();
+  const fps=PERF.n/PERF.sum;PERF.t=0;PERF.n=0;PERF.sum=0;PERF.first=false;SET.fps=Math.round(fps);
+  // Stufen: hoch (2×) -> hoch/mittel (1,5×, <50 fps) -> Sparmodus (1×, <40 fps) -> ohne Schatten (<26 fps)
+  if(SET.q==='high'&&!SET.mid&&fps<50)PERF.want='mid';
+  else if(SET.q==='high'&&SET.mid&&fps<40&&!SET.qManual)PERF.want='low';
+  // ohne Schatten erst ab dem 2. Start: das Umschalten baut alle Programme neu, beim ersten Start käme sonst ein zweiter Hänger dazu
+  else if(SET.q==='low'&&!SET.lite&&fps<26&&(SET.boots||0)>=2)PERF.want='lite';
+  if(PERF.want&&(state!=='play'||PERF.want!=='lite'))perfApply();
 }
 // Solange das Isukato-Intro deckend davor liegt, wird nichts gezeichnet: die Grafik gehört dann ganz dem Video (flüssige 60 fps)
 let introEl=document.getElementById('isu-intro');
+const INTRO_DRAW={k:0,n:0};
 const introCovers=()=>{if(!introEl)return false;if(!introEl.isConnected||introEl.classList.contains('aus')){introEl=null;return false;}return true;};
 function simStep(rdt){
   let dt=state==='pause'?0:rdt;
@@ -3061,7 +3070,9 @@ function simStep(rdt){
 }
 function frame(now){
   if(!TEST||!TEST.manual)requestAnimationFrame(frame);
-  if(introCovers()){last=now;return;}
+  // Hinter dem Intro gedrosselt zeichnen (jedes 4. Bild, höchstens 6×): so ist alles einmal gezeichnet, bevor man die Welt sieht,
+  // und das Intro-Video läuft trotzdem flüssig
+  if(introCovers()){last=now;if(INTRO_DRAW.n<6&&++INTRO_DRAW.k%4===0){INTRO_DRAW.n++;updateCamera(0);try{renderer.render(scene,camera);}catch(e){}}return;}
   const raw=Math.max(0,(now-last)/1000);if(!TEST)perfCheck(Math.min(raw,0.5));
   // Zeitlupe auf langsamen Geräten behoben: vorher wurde jedes Bild auf 0,05 s gekappt, unter 20 fps lief das ganze Spiel langsamer.
   // Jetzt wird ein langes Bild in kleine Schritte (höchstens 1/30 s) zerlegt, das Spiel läuft also in Echtzeit weiter.
@@ -3084,7 +3095,10 @@ let bootDone;
 window.CrossingCandy={ready:new Promise(r=>{bootDone=r;}),isReady:false};
 // Laden in Etappen: zwischen den schweren Schritten bekommt der Browser Luft (Intro-Animation bleibt flüssig)
 const breathe=()=>new Promise(r=>setTimeout(r,0));
-loadModels().then(async()=>{bt('modelle');
+// Erst das Intro-Video anlaufen lassen, dann die Modelle laden (vorher blieb das Intro auf dem iPhone ~4 s schwarz)
+const introStarted=()=>new Promise(r=>{const v=document.querySelector('#isu-intro video');if(!v||!v.paused)return r();
+  let ok=false;const go=()=>{if(ok)return;ok=true;r();};v.addEventListener('playing',()=>setTimeout(go,150),{once:true});v.addEventListener('error',go,{once:true});setTimeout(go,1500);});
+introStarted().then(loadModels).then(async()=>{bt('modelle');
   setAtmosphereNow(0);bt('stimmung');await breathe();
   applySkin(skinId);bt('figur');
   pBlob=blob(scene,0,0.013,0,0.84);
@@ -3115,6 +3129,23 @@ loadModels().then(async()=>{bt('modelle');
       await breathe();
     }
     if(TEST)BOOT.mats=mats.length,BOOT.compileMs=Math.round(performance.now()-t0);
+    // Echtes Zeichnen als Aufwärmen: Safari/iOS baut die Grafik-Programme erst beim ersten wirklichen Zeichnen fertig
+    // (renderer.compile reicht dort nicht – im iPhone-Video blieb die 3D-Welt danach noch ~10 s leer).
+    // Portionsweise wie oben, ohne Sichtbarkeits-Prüfung, damit auch Objekte außerhalb des Bilds einmal gezeichnet werden.
+    // Das Intro liegt deckend davor, man sieht davon nichts.
+    {const tw=performance.now(),fc=new Map(),hide=!introCovers();if(hide)canvas.style.opacity='0';rs.forEach(o=>{fc.set(o,o.frustumCulled);o.frustumCulled=false;});
+      for(let i=0;i<mats.length;i+=STEP*2){
+        const chunk=new Set(mats.slice(i,i+STEP*2));
+        const keep=o=>!rsSet.has(o)||(Array.isArray(o.material)?o.material:[o.material]).some(x=>chunk.has(x));
+        saved.forEach((ch,par)=>{par.children=ch.filter(keep);});
+        try{renderer.render(scene,camera);}catch(e){}
+        saved.forEach((ch,par)=>{par.children=ch.slice();});
+        await breathe();
+      }
+      fc.forEach((v,o)=>{o.frustumCulled=v;});
+      try{renderer.render(scene,camera);}catch(e){}
+      if(hide)canvas.style.opacity='';
+      if(TEST)BOOT.warmDrawMs=Math.round(performance.now()-tw);}
     {const tf=performance.now();try{renderer.compile(scene,camera);}catch(e){}if(TEST)BOOT.finalMs=Math.round(performance.now()-tf);}
   }catch(e){}
   bt('shader');await breathe();
