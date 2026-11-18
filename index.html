@@ -15,6 +15,13 @@
 @font-face{font-family:"Figtree";font-weight:700;font-style:normal;font-display:swap;src:url(fonts/figtree-latin-700-normal.woff2) format("woff2")}
 @font-face{font-family:"Figtree";font-weight:800;font-style:normal;font-display:swap;src:url(fonts/figtree-latin-800-normal.woff2) format("woff2")}
 @font-face{font-family:"Figtree";font-weight:900;font-style:normal;font-display:swap;src:url(fonts/figtree-latin-900-normal.woff2) format("woff2")}
+
+/* Lädt das Spiel nach dem Intro-Video noch (alte Geräte übersetzen lange die Grafik-Programme), dreht sich ein Ladekreis statt eines
+   eingefrorenen Bilds. Reines CSS (transform/opacity): läuft auch weiter, wenn das Spiel den Hauptthread gerade blockiert. */
+#isu-intro::after{content:'';position:absolute;left:50%;top:calc(50% + min(50vw,50vh) - 10px);width:30px;height:30px;margin-left:-15px;box-sizing:border-box;border-radius:50%;
+  border:3px solid rgba(255,255,255,.14);border-top-color:#FF8FC4;opacity:0;animation:isuLoadIn .4s 4.4s forwards,isuSpin .85s linear infinite;pointer-events:none}
+@keyframes isuLoadIn{to{opacity:1}}
+@keyframes isuSpin{to{transform:rotate(360deg)}}
 </style>
 <style>
 /* ============================================================
@@ -709,6 +716,8 @@ const canvas=$('c');
 let renderer;
 try{renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,powerPreference:'high-performance'});}
 catch(e){fatal('Dein Gerät unterstützt die 3D-Grafik dieses Spiels leider nicht.');return;}
+// Kein synchrones Prüfen jedes Shaders (blockiert sonst bis zum Ende jeder Übersetzung) – nur im Testmodus an
+if(renderer&&renderer.debug)renderer.debug.checkShaderErrors=/[?&]test=1/.test(location.search)&&!/[?&]fastshader=1/.test(location.search);
 renderer.setClearColor(0x000000,0);
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.shadowMap.enabled=true;
@@ -729,9 +738,12 @@ scene.add(sun); scene.add(sun.target);
 const rim=new THREE.DirectionalLight(0xffffff,0.16); scene.add(rim); scene.add(rim.target);
 const plight=new THREE.PointLight(0xffd9a8,0,7,2); scene.add(plight);
 function applyShadowQuality(){
+  // „lite“ = automatische dritte Stufe für alte Geräte: keine Schatten (spart den ganzen Schattenpass) und weniger Pixel
+  const lite=SET.q==='low'&&!!SET.lite;
+  sun.castShadow=!lite;
   const s=SET.q==='low'?768:2048;
   if(sun.shadow.mapSize.x!==s){sun.shadow.mapSize.set(s,s); if(sun.shadow.map){sun.shadow.map.dispose(); sun.shadow.map=null;}}
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, SET.q==='low'?1:2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, lite?0.85:SET.q==='low'?1:2));
 }
 applyShadowQuality();
 
@@ -1213,22 +1225,23 @@ function BUS(){
   try{
     const inp=actx.createGain(),comp=actx.createDynamicsCompressor(),master=actx.createGain();
     comp.threshold.value=-20;comp.knee.value=14;comp.ratio.value=3.2;comp.attack.value=0.004;comp.release.value=0.22;master.gain.value=1.35;
-    const conv=actx.createConvolver(),len=Math.floor(actx.sampleRate*1.7),ir=actx.createBuffer(2,len,actx.sampleRate);
+    const conv=actx.createConvolver(),len=Math.floor(actx.sampleRate*1.1),ir=actx.createBuffer(2,len,actx.sampleRate);
     for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,3.4);}
     conv.buffer=ir;const pre=actx.createBiquadFilter();pre.type='lowpass';pre.frequency.value=5200;const wet=actx.createGain();wet.gain.value=0.2;
-    inp.connect(comp);inp.connect(pre);pre.connect(conv);conv.connect(wet);wet.connect(comp);comp.connect(master);master.connect(actx.destination);
+    inp.connect(comp);if(SET.q!=='low')inp.connect(pre);pre.connect(conv);conv.connect(wet);wet.connect(comp);comp.connect(master);master.connect(actx.destination);
     BUSN=inp;
   }catch(e){BUSN=actx.destination;}
   return BUSN;
 }
 /* ---------- Synth-Bausteine (Web Audio, es werden keine Audiodateien gebraucht) ---------- */
+let NOISEB=null;
+function noiseBuf(){if(!NOISEB){const n=actx.sampleRate*2;NOISEB=actx.createBuffer(1,n,actx.sampleRate);const d=NOISEB.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;}return NOISEB;}
 function noiseHit(dur,vol,delay=0,freq=1200,type='bandpass',freq2=0,q=1){
   if(!SET.sound||!actx)return;
-  try{const t=actx.currentTime+delay,n=Math.max(1,Math.floor(actx.sampleRate*dur)),b=actx.createBuffer(1,n,actx.sampleRate),d=b.getChannelData(0);
-    for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
-    const s=actx.createBufferSource();s.buffer=b;const f=actx.createBiquadFilter();f.type=type;f.Q.value=q;f.frequency.setValueAtTime(freq,t);if(freq2)f.frequency.exponentialRampToValueAtTime(freq2,t+dur);
+  try{const t=actx.currentTime+delay;
+    const s=actx.createBufferSource();s.buffer=noiseBuf();const f=actx.createBiquadFilter();f.type=type;f.Q.value=q;f.frequency.setValueAtTime(freq,t);if(freq2)f.frequency.exponentialRampToValueAtTime(freq2,t+dur);
     const g=actx.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    s.connect(f);f.connect(g);g.connect(BUS());s.start(t);s.stop(t+dur+0.02);}catch(e){}
+    s.connect(f);f.connect(g);g.connect(BUS());s.start(t,Math.random()*1.5);s.stop(t+dur+0.02);}catch(e){}
 }
 function fmTone(fc,ratio,index,dur,vol,delay=0,type='sine',fc2=0){
   if(!SET.sound||!actx)return;
@@ -1258,6 +1271,49 @@ const VOICE={
   whoo:(f,d,v,dl,g)=>fmTone(f*1.2,0.025,0.2,d*2.6,v,dl,'sine',g?g*1.2:f*0.8),
   sparkle:(f,d,v,dl)=>{bellTone(f*2.5,d*1.5,v,dl);bellTone(f*3.75,d*1.5,v*0.7,dl+0.06);},
 };
+// Saite (Karplus-Strong): echt gezupfter Klang, wird pro Ton kurz berechnet
+function ksPluck(f,dur,vol,delay=0,bright=0.5){
+  if(!SET.sound||!actx)return;
+  try{const sr=actx.sampleRate,N=Math.floor(sr*dur),b=actx.createBuffer(1,N,sr),d=b.getChannelData(0),P=Math.max(2,Math.round(sr/f)),buf=new Float32Array(P);
+    for(let i=0;i<P;i++)buf[i]=Math.random()*2-1;let ix=0;const damp=0.4985+bright*0.0012;
+    for(let i=0;i<N;i++){const nx=(ix+1)%P,v=buf[ix];d[i]=v;buf[ix]=damp*(v+buf[nx]);ix=nx;}
+    const t=actx.currentTime+delay,src=actx.createBufferSource(),g=actx.createGain();src.buffer=b;
+    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);src.connect(g);g.connect(BUS());src.start(t);src.stop(t+dur);}catch(e){}
+}
+// Feder: Ton, dessen Höhe ausschwingt (boing)
+function springTone(f,dur,vol,delay=0){
+  if(!SET.sound||!actx)return;
+  try{const t=actx.currentTime+delay,o=actx.createOscillator(),l=actx.createOscillator(),lg=actx.createGain(),g=actx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(f,t);l.frequency.setValueAtTime(16,t);l.frequency.exponentialRampToValueAtTime(7,t+dur);
+    lg.gain.setValueAtTime(f*0.45,t);lg.gain.exponentialRampToValueAtTime(f*0.02,t+dur);l.connect(lg);lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g);g.connect(BUS());o.start(t);l.start(t);o.stop(t+dur+0.02);l.stop(t+dur+0.02);}catch(e){}
+}
+// Stimme „uuh“: Sägezahn durch zwei Formantfilter, mit Vibrato
+function oohTone(f,dur,vol,delay=0,f2=0){
+  if(!SET.sound||!actx)return;
+  try{const t=actx.currentTime+delay,o=actx.createOscillator(),l=actx.createOscillator(),lg=actx.createGain(),g=actx.createGain(),mix=actx.createGain();
+    o.type='sawtooth';o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+    l.frequency.value=5.5;lg.gain.value=f*0.02;l.connect(lg);lg.connect(o.frequency);
+    for(const [fq,q,lv] of [[380,6,1],[850,8,0.45]]){const bp=actx.createBiquadFilter();bp.type='bandpass';bp.frequency.value=fq;bp.Q.value=q;const bg=actx.createGain();bg.gain.value=lv;o.connect(bp);bp.connect(bg);bg.connect(mix);}
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol*2.2,t+Math.min(0.06,dur*0.3));g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    mix.connect(g);g.connect(BUS());o.start(t);l.start(t);o.stop(t+dur+0.02);l.stop(t+dur+0.02);}catch(e){}
+}
+Object.assign(VOICE,{
+  marimba:(f,d,v,dl)=>{fmTone(f,4,1.6,0.35+d,v,dl);fmTone(f*4,1,0.25,0.07,v*0.28,dl);},
+  kalimba:(f,d,v,dl)=>{fmTone(f*2,5.4,0.8,0.55+d,v,dl);fmTone(f*4,1,0.3,0.05,v*0.2,dl);},
+  boing:(f,d,v,dl)=>springTone(f*1.2,0.18+d*2,v,dl),
+  pop:(f,d,v,dl)=>{sfx(f*0.8,f*2.6,0.05,'sine',v*1.1,dl);noiseHit(0.025,v*0.3,dl,f*5,'bandpass',0,3);},
+  squish:(f,d,v,dl,g)=>{noiseHit(d*1.6,v*0.55,dl,f*3,'lowpass',f*0.7,2);sfx(f*1.3,g?g*0.8:f*0.7,d*1.5,'sine',v*0.8,dl);},
+  plush:(f,d,v,dl,g)=>{noiseHit(d*1.1,v*0.45,dl,f*2.2,'lowpass',f*0.8,1);sfx(f,g?g*0.6:f*0.62,d*1.4,'sine',v,dl);},
+  woodblock:(f,d,v,dl)=>{noiseHit(0.045,v*0.55,dl,f*3,'bandpass',0,12);fmTone(f*2,1.6,0.6,0.09+d*0.3,v,dl);},
+  glass:(f,d,v,dl)=>{fmTone(f*2,2.76,0.75,0.8+d*2,v*0.8,dl);fmTone(f*5.4,1,0.2,0.35,v*0.22,dl);},
+  chirp:(f,d,v,dl,g)=>{sfx(f*1.2,(g||f*1.4)*1.7,d*0.8,'sine',v,dl);sfx(f*1.6,(g||f*1.4)*2,d*0.6,'sine',v*0.45,dl+d*0.45);},
+  harp:(f,d,v,dl)=>ksPluck(f*1.5,0.7+d*2,v*1.5,dl,0.6),
+  ooh:(f,d,v,dl,g)=>oohTone(f,0.2+d*1.8,v,dl,g||0),
+  slide:(f,d,v,dl,g)=>sfx(f,(g||f*1.6)*1.3,d*1.6,'sine',v,dl),
+  crunch:(f,d,v,dl)=>{for(let k=0;k<3;k++)noiseHit(0.03,v*0.5,dl+k*0.028,f*4+k*500,'highpass');sfx(f,f*0.7,0.06,'triangle',v*0.45,dl);},
+});
 // Ein komplettes Sound-Set aus einer Klangfarbe: 3 Hüpf-Varianten, je 2 Varianten pro Todesart, 2 Jingles
 function kit(name,b){const V=VOICE[name];
   return {voice:name,
@@ -1293,6 +1349,7 @@ const Music={def:null,timer:null,step:0,next:0,gain:null,
   stop(){if(this.timer)clearInterval(this.timer);this.timer=null;const g=this.gain;this.gain=null;this.def=null;
     if(g&&actx){try{g.gain.cancelScheduledValues(actx.currentTime);g.gain.setValueAtTime(Math.max(0.0001,g.gain.value),actx.currentTime);g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+0.35);}catch(e){}setTimeout(()=>{try{g.disconnect();}catch(e){}},700);}},
   tick(){const d=this.def;if(!d||!actx||!this.gain)return;const spb=60/d.bpm/4;
+    if(this.next<actx.currentTime-0.05){const miss=Math.ceil((actx.currentTime-this.next)/spb);this.step+=miss;this.next+=miss*spb;}   // verpasste Schläge überspringen statt nachzuholen
     while(this.next<actx.currentTime+0.25){for(const tr of d.tracks){const n=tr.notes[this.step%tr.notes.length];if(n!=null)this.voice(tr,n,this.next,spb*(tr.len||1));}this.step++;this.next+=spb;}},
   voice(tr,n,t,len){try{const g=actx.createGain();
     const att=tr.inst==='pad'?Math.min(0.5,len*0.3):0.012;
@@ -1309,8 +1366,7 @@ const Music={def:null,timer:null,step:0,next:0,gain:null,
     if(tr.inst==='bass'){const f=actx.createBiquadFilter();f.type='lowpass';f.frequency.value=700;f.connect(g);
       const o=actx.createOscillator();o.type='triangle';o.frequency.setValueAtTime(NOTE(n),t);o.connect(f);
       const o2=actx.createOscillator();o2.type='sine';o2.frequency.setValueAtTime(NOTE(n-12),t);o2.connect(f);o.start(t);o2.start(t);o.stop(t+len);o2.stop(t+len);return;}
-    if(tr.noise){const N=Math.floor(actx.sampleRate*len),b=actx.createBuffer(1,N,actx.sampleRate),dd=b.getChannelData(0);for(let i=0;i<N;i++)dd[i]=Math.random()*2-1;
-      const s=actx.createBufferSource();s.buffer=b;const f=actx.createBiquadFilter();f.type='highpass';f.frequency.value=tr.freq||6000;s.connect(f);f.connect(g);s.start(t);s.stop(t+len);return;}
+    if(tr.noise){const s=actx.createBufferSource();s.buffer=noiseBuf();const f=actx.createBiquadFilter();f.type='highpass';f.frequency.value=tr.freq||6000;s.connect(f);f.connect(g);s.start(t,Math.random()*1.5);s.stop(t+len);return;}
     const o=actx.createOscillator();o.type=tr.wave||'triangle';o.frequency.setValueAtTime(NOTE(n+(tr.oct||0)*12),t);
     if(tr.vib){const l=actx.createOscillator(),lg=actx.createGain();l.frequency.value=5.5;lg.gain.value=NOTE(n)*0.018;l.connect(lg);lg.connect(o.frequency);l.start(t);l.stop(t+len);}
     o.connect(g);o.start(t);o.stop(t+len);}catch(e){}}
@@ -1372,7 +1428,45 @@ const WMUS=[
     {notes:bassTrack(ch,[0,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null]),inst:'bass',vol:0.26,len:8},
     {notes:mel([74,77,81,79,null,77,74,null],8),inst:'bell',vol:0.07,len:8,pan:-0.3}]};})(),
 ];
+/* ---------- Musik-Varianten je Welt ---------- */
+const WSRC=[
+  {ch:[[60,''],[55,''],[57,'m'],[53,'']],mel:[72,76,79,77,76,72,74,null],bpm:100},
+  {ch:[[64,'m'],[60,''],[55,''],[62,'']],mel:[76,79,83,81,79,76,74,null],bpm:90},
+  {ch:[[57,'m'],[53,''],[60,''],[55,'']],mel:[69,72,76,74,72,69,67,null],bpm:112},
+  {ch:[[62,'m'],[58,''],[53,''],[60,'']],mel:[74,77,81,79,null,77,74,null],bpm:80},
+];
+const MSTYLE={
+  // B: Spieluhr – nur Glöckchen und weiche Fläche, langsamer
+  box:({ch,mel:mm,bpm})=>({bpm:Math.round(bpm*0.85),vol:0.055,tracks:[
+    ...padTr(ch,0.035,900),
+    {notes:arpTrack(ch,[0,1,2,4,2,1,0,1,0,2,4,5,4,2,1,2]),inst:'bell',vol:0.08,len:2,oct:1,pan:0.25},
+    {notes:mel(mm.map(n=>n==null?null:n+12),8),inst:'bell',vol:0.06,len:7,pan:-0.25},
+    {notes:bassTrack(ch,[0,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]),inst:'bass',vol:0.18,len:12}]}),
+  // C: Pop – schneller, durchgehender Beat, gezupfter Bass in Achteln, Clap auf 2 und 4
+  pop:({ch,mel:mm,bpm})=>({bpm:Math.round(bpm*1.12),vol:0.05,tracks:[
+    ...padTr(ch,0.04,1800),
+    {notes:arpTrack(ch,[0,2,1,2,0,2,1,2,0,2,1,2,3,2,1,2]),inst:'pluck',vol:0.14,len:1,oct:1,pan:0.3},
+    {notes:bassTrack(ch,[0,null,0,null,0,null,0,null,0,null,0,null,7,null,5,null]),inst:'bass',vol:0.3,len:0.9},
+    {notes:rep([1,null,null,null],16),inst:'kick',vol:0.38},
+    {notes:rep([null,null,null,null,1,null,null,null],8),noise:true,freq:1500,vol:0.06,len:0.6},
+    {notes:rep([null,null,1,null],16),noise:true,freq:8000,vol:0.04,len:0.3},
+    {notes:mel(mm,4).concat(mel(mm,4)),inst:'pluck',vol:0.1,len:2,oct:1,pan:-0.2}]}),
+  // D: Lo-Fi – gemütlich, gefiltert, langsamer Beat
+  lofi:({ch,mel:mm,bpm})=>({bpm:Math.round(bpm*0.78),vol:0.06,filter:{type:'lowpass',freq:1900},tracks:[
+    ...padTr(ch,0.06,800,-1),
+    {notes:arpTrack(ch,[0,null,2,null,null,4,null,2,0,null,null,2,null,4,null,null]),inst:'pluck',vol:0.13,len:2.5,pan:0.2},
+    {notes:bassTrack(ch,[0,null,null,null,null,null,0,null,null,null,7,null,null,null,null,null]),inst:'bass',vol:0.3,len:3},
+    {notes:rep([1,null,null,null,null,null,1,null,null,null,1,null,null,null,null,null],4),inst:'kick',vol:0.3},
+    {notes:rep([null,null,null,null,1,null,null,null],8),noise:true,freq:2500,vol:0.045,len:0.5},
+    {notes:mel(mm,8),inst:'bell',vol:0.05,len:6,pan:-0.3}]}),
+};
+const MUS_VAR=WSRC.map((w,i)=>[WMUS[i],MSTYLE.box(w),MSTYLE.pop(w),MSTYLE.lofi(w)]);
+// Vom Nutzer im Musik-Labor gewählt (1.7): Wiese Lo-Fi, Eisland Spieluhr, Vulkan wie bisher, Weltall Lo-Fi
+const MUSIC_PICK=[3,1,0,3];
+if(!/[?&]musiclab=1/.test(location.search))MUSIC_PICK.forEach((v,i)=>{WMUS[i]=MUS_VAR[i][v];});
+let SLM=false;   // Musik-Labor aktiv: normale Musiksteuerung pausiert
 function musicTick(){
+  if(SLM)return;
   const d=SET.music===false?null:((activeSkin&&activeSkin.music)||WMUS[(state==='play'||state==='ready')?curWorld%WMUS.length:0]);
   const want=!!(d&&SET.sound&&actx&&actx.state==='running'&&!document.hidden&&(state==='menu'||state==='ready'||state==='play'));
   if(want&&Music.def!==d)Music.start(d);else if(!want&&Music.def)Music.stop();
@@ -2710,7 +2804,7 @@ $('tMusic').addEventListener('click',()=>{SET.music=SET.music===false;saveSet();
 // Farben und Symbole werden beim Laden gebaut – darum kurz neu laden (Fortschritt bleibt erhalten)
 $('tCb').addEventListener('click',()=>{SET.cb=!SET.cb;saveSet();renderSettings();setTimeout(()=>location.reload(),250);});
 if(IOS){const vr=$('tVib').closest('.set');if(vr)vr.classList.add('hidden');}
-function setQuality(q){SET.q=q;SET.qChecked=true;saveSet();document.body.classList.toggle('low',q==='low');applyShadowQuality();resize();renderSettings();}
+function setQuality(q,auto){SET.q=q;SET.qChecked=true;if(!auto){SET.lite=false;SET.qManual=true;}saveSet();document.body.classList.toggle('low',q==='low');applyShadowQuality();resize();renderSettings();}
 $('qHigh').addEventListener('click',()=>setQuality('high'));
 $('qLow').addEventListener('click',()=>setQuality('low'));
 $('privacyBtn').addEventListener('click',()=>{if(AdMob)quiet(AdMob.showPrivacyOptionsForm());});
@@ -2927,30 +3021,34 @@ if(TEST){
 
 /* ---------- Schleife ---------- */
 let last=performance.now();
-// Leistungsprüfung beim ersten Start: ruckelt das Menü, schaltet sich der Sparmodus ein
-const PERF={n:0,sum:0,t:0};
+// Leistungsprüfung: läuft laufend im Menü und im Spiel (vorher nur einmal ganz am Anfang im Menü).
+// Ruckelt es, wird stufenweise heruntergeschaltet: hoch -> Sparmodus (<40 fps) -> ohne Schatten (<26 fps). Nie automatisch hoch.
+// Hat der Spieler die Qualität selbst gewählt, wird nur noch die Schatten-Stufe automatisch zugeschaltet, wenn es wirklich ruckelt.
+const PERF={n:0,sum:0,t:0,want:null};
+function perfApply(){
+  const w=PERF.want;PERF.want=null;PERF.t=0;PERF.n=0;PERF.sum=0;
+  if(w==='low'&&SET.q==='high'){setQuality('low',true);SET.qAuto=true;saveSet();toast('Sparmodus an: Das Spiel läuft so flüssiger','mint','g-sparkle');}
+  else if(w==='lite'&&SET.q==='low'&&!SET.lite){SET.lite=true;SET.qAuto=true;saveSet();applyShadowQuality();resize();toast('Ohne Schatten: läuft so flüssiger','mint','g-sparkle');}
+}
 function perfCheck(raw){
-  if(SET.qChecked||state!=='menu'||document.hidden)return;
-  PERF.t+=raw;if(PERF.t<2)return;                       // erst nach dem Einschwingen messen
-  PERF.n++;PERF.sum+=raw;if(PERF.n<120)return;
-  const fps=PERF.n/PERF.sum;SET.qChecked=true;SET.fps=Math.round(fps);
-  if(fps<40&&SET.q==='high'){setQuality('low');SET.qAuto=true;toast('Sparmodus an: Das Spiel läuft so flüssiger','mint','g-sparkle');}
-  saveSet();
+  // Umschalten baut die Grafik-Programme neu (kurzer Hänger) – daher nie mitten im Lauf, sondern im Menü, beim Warten auf den ersten Sprung oder nach dem Tod
+  if(PERF.want&&(state!=='play'||dead)){perfApply();return;}
+  if((state!=='menu'&&state!=='play')||dead||document.hidden||raw>0.5){PERF.t=0;PERF.n=0;PERF.sum=0;return;}
+  PERF.t+=raw;if(PERF.t<1.5)return;                     // nach Start/Umschalten erst einschwingen lassen
+  PERF.n++;PERF.sum+=raw;if(PERF.n<90&&PERF.sum<3)return;   // 90 Bilder oder 3 s, damit langsame Geräte nicht ewig warten
+  const fps=PERF.n/PERF.sum;PERF.t=0;PERF.n=0;PERF.sum=0;SET.fps=Math.round(fps);
+  if(SET.q==='high'&&fps<40&&!SET.qManual)PERF.want='low';
+  else if(SET.q==='low'&&!SET.lite&&fps<26)PERF.want='lite';
+  if(PERF.want&&state!=='play')perfApply();
 }
 // Solange das Isukato-Intro deckend davor liegt, wird nichts gezeichnet: die Grafik gehört dann ganz dem Video (flüssige 60 fps)
 let introEl=document.getElementById('isu-intro');
 const introCovers=()=>{if(!introEl)return false;if(!introEl.isConnected||introEl.classList.contains('aus')){introEl=null;return false;}return true;};
-function frame(now){
-  if(!TEST||!TEST.manual)requestAnimationFrame(frame);
-  if(introCovers()){last=now;return;}
-  const raw=Math.max(0,(now-last)/1000);if(!TEST)perfCheck(Math.min(raw,0.5));
-  const rdt=Math.min(0.05,raw);last=now;
+function simStep(rdt){
   let dt=state==='pause'?0:rdt;
   if(slowT>0&&dt>0){slowT-=rdt;dt*=0.35;}
   time+=dt;
-  const lookLane=-Math.round(focusZ)+8;
-  updateAtmosphere(rdt,lookLane);
-  updateLanes(dt);if(TEST)TEST.tick();updatePlayer(dt);updateParticles(dt);updateFX(dt);updateTrail(dt);musicTick();
+  updateLanes(dt);if(TEST)TEST.tick();updatePlayer(dt);updateParticles(dt);updateFX(dt);updateTrail(dt);
   if(state==='play'&&!dead){
     if(combo>0&&time-lastFwd>comboWin()){combo=0;hudCombo();}
     const wi=worldIdx(player.lane);if(wi!==curWorld){curWorld=wi;banner(wi);vib([20,40,20]);sfx(500,1000,0.3,'triangle',0.05);sfx(750,1500,0.3,'triangle',0.04,0.15);}
@@ -2960,6 +3058,18 @@ function frame(now){
     if(pz<focusZ-0.002)focusZ+=(pz-focusZ)*damp(5,dt);else focusZ-=(0.42+Math.min(0.6,score/160))*dt;
     if(pz-focusZ>3.6)die('wake');
   }
+}
+function frame(now){
+  if(!TEST||!TEST.manual)requestAnimationFrame(frame);
+  if(introCovers()){last=now;return;}
+  const raw=Math.max(0,(now-last)/1000);if(!TEST)perfCheck(Math.min(raw,0.5));
+  // Zeitlupe auf langsamen Geräten behoben: vorher wurde jedes Bild auf 0,05 s gekappt, unter 20 fps lief das ganze Spiel langsamer.
+  // Jetzt wird ein langes Bild in kleine Schritte (höchstens 1/30 s) zerlegt, das Spiel läuft also in Echtzeit weiter.
+  const full=Math.min(0.25,raw);last=now;
+  const steps=Math.max(1,Math.ceil(full/0.034-1e-6)),sdt=full/steps;
+  for(let k=0;k<steps;k++)simStep(sdt);
+  updateAtmosphere(full,-Math.round(focusZ)+8);musicTick();
+  const rdt=full;
   updateCamera(state==='pause'?0:rdt);
   manageLanes();
   if(!TEST||TEST.render)renderer.render(scene,camera);
@@ -2986,7 +3096,27 @@ loadModels().then(async()=>{bt('modelle');
   hudWallet();hudBest();questBadge();
   setInterval(tickTimers,1000);tickTimers();
   // Grafik-Programme (Shader) jetzt übersetzen statt beim ersten Bild – das war der Hänger beim Start
-  try{renderer.compile(scene,camera);}catch(e){}
+  // In Portionen übersetzen: Lichter bleiben sichtbar, von den übrigen Objekten jeweils nur ein paar –
+  // so blockiert kein einzelner Schritt lange (erster Start auf dem iPhone: vorher bis ~12 s am Stück eingefroren)
+  try{
+    const rs=[];scene.traverse(o=>{if((o.isMesh||o.isPoints||o.isLine||o.isSprite)&&o.material)rs.push(o);});
+    const rsSet=new Set(rs),mats=[...new Set(rs.flatMap(o=>Array.isArray(o.material)?o.material:[o.material]))];
+    const saved=new Map();rs.forEach(o=>{if(o.parent&&!saved.has(o.parent))saved.set(o.parent,o.parent.children.slice());});
+    {const tw=performance.now(),ws=new THREE.Scene(),wm=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());ws.add(wm);try{renderer.compile(ws,camera);}catch(e){}if(TEST)BOOT.warmMs=Math.round(performance.now()-tw);wm.geometry.dispose();wm.material.dispose();await breathe();}
+    const STEP=3,t0=performance.now();
+    // renderer.compile beachtet "visible" nicht – darum pro Schritt nur die Objekte mit diesen Materialien in der Szene lassen
+    for(let i=0;i<mats.length;i+=STEP){
+      const chunk=new Set(mats.slice(i,i+STEP));
+      const keep=o=>!rsSet.has(o)||(Array.isArray(o.material)?o.material:[o.material]).some(x=>chunk.has(x));
+      saved.forEach((ch,par)=>{par.children=ch.filter(keep);});
+      const tc=performance.now();try{renderer.compile(scene,camera);}catch(e){}
+      if(TEST){const d=performance.now()-tc;if(!BOOT.maxChunk||d>BOOT.maxChunk){BOOT.maxChunk=Math.round(d);BOOT.maxChunkAt=i;}}
+      saved.forEach((ch,par)=>{par.children=ch.slice();});
+      await breathe();
+    }
+    if(TEST)BOOT.mats=mats.length,BOOT.compileMs=Math.round(performance.now()-t0);
+    {const tf=performance.now();try{renderer.compile(scene,camera);}catch(e){}if(TEST)BOOT.finalMs=Math.round(performance.now()-tf);}
+  }catch(e){}
   bt('shader');await breathe();
   last=performance.now();
   requestAnimationFrame(frame);
@@ -3044,6 +3174,114 @@ if(TEST){const sm=(location.search.match(/[?&]shot=([a-z0-9]+)/)||[])[1];
     }
     await wait(800);document.title='SHOT-READY';
   });}
+// Kandidaten pro Figur: A = aktueller Klang, B–D neue Varianten (Klangfarbe, Grundton)
+const SL_CAND={
+  bonbo:[['plush',260],['pop',420],['marimba',392]],   mallo:[['plush',220],['boing',260],['squish',300]],
+  pralino:[['marimba',330],['woodblock',440],['kalimba',392]], ninja:[['whoosh',600],['woodblock',520],['crunch',700]],
+  eisi:[['glass',523],['crystal',660],['kalimba',523]],  wolke:[['ooh',330],['whoo',260],['pop',500]],
+  gold:[['harp',392],['bell',523],['sparkle',523]],      keksi:[['crunch',600],['woodblock',400],['marimba',330]],
+  zucki:[['glass',700],['crystal',784],['kalimba',659]], lolli:[['boing',330],['slide',440],['pop',523]],
+  baerli:[['boing',220],['squish',260],['plush',200]],   toffi:[['plush',180],['woodblock',330],['marimba',262]],
+  muffi:[['plush',200],['pop',392],['marimba',294]],     rosi:[['squeak',380],['ooh',300],['boing',300]],
+  schnecki:[['slide',300],['whoosh',450],['woodblock',300]], makri:[['kalimba',523],['glass',600],['pop',440]],
+  quaki:[['ooh',200],['boing',180],['pop',300]],         blubbi:[['pop',400],['squish',300],['boing',340]],
+  klonk:[['woodblock',300],['glass',440],['marimba',220]], bimmel:[['glass',523],['harp',392],['kalimba',523]],
+  quietschi:[['chirp',600],['pop',520],['ooh',420]],     rollo:[['boing',200],['woodblock',260],['plush',160]],
+  flora:[['chirp',700],['harp',523],['kalimba',659]],    wabbel:[['squish',240],['boing',220],['plush',200]],
+  zisch:[['pop',600],['chirp',800],['glass',784]],       kometa:[['glass',659],['harp',523],['sparkle',659]],
+  kristalla:[['glass',784],['kalimba',659],['bell',523]], melonia:[['kalimba',392],['marimba',330],['harp',392]],
+  buh:[['ooh',220],['slide',260],['glass',330]],         glitzi:[['harp',523],['glass',659],['chirp',784]],
+};
+// Vom Nutzer im Klang-Labor ausgewählte Varianten (Version 1.7); 0 = bisheriger Klang bleibt
+const SOUND_PICK={"bonbo":2,"mallo":1,"pralino":1,"eisi":1,"wolke":1,"gold":3,"zucki":2,"lolli":1,"baerli":3,"toffi":3,"muffi":1,"rosi":2,"schnecki":3,"makri":3,"quaki":2,"blubbi":1,"klonk":1,"bimmel":3,"rollo":3,"flora":3,"wabbel":2,"zisch":0,"kometa":3,"kristalla":3,"melonia":0,"buh":1,"glitzi":0};
+const SND_ORIG={};
+if(!(TEST&&/[?&]soundlab=1/.test(location.search)))for(const sk of SKINS){const v=SOUND_PICK[sk.id],c=v&&(SL_CAND[sk.id]||[])[v-1];if(c){SND_ORIG[sk.id]=sk.snd;sk.snd=kit(c[0],c[1]);}}
+function slKit(s,v){if(v===0)return s.snd||null;const c=(SL_CAND[s.id]||[])[v-1];return c?kit(c[0],c[1]):null;}
+function slPlay(s,v,what){
+  unlockAudio();const K=slKit(s,v);
+  if(what==='hop'){if(K)[0,6,12].forEach((c,i)=>setTimeout(()=>playVar(K.hop,'slhop',c),i*330));else[0,6,12].forEach((c,i)=>setTimeout(()=>sfx(520+c*16,880+c*28,0.09,'sine',0.055),i*330));}
+  else if(what==='die'){if(K)playVar(K.die.hit,'sldie');else sfx(420,90,0.35,'triangle',0.08);}
+  else if(what==='water'){if(K)playVar(K.die.water,'slwater');else sfx(300,70,0.45,'sine',0.09);}
+  else if(what==='jingle'){if(K)playVar(K.jingle,'sljingle');else chime();}
+}
+if(TEST&&/[?&]soundlab=1/.test(location.search))window.CrossingCandy.ready.then(()=>{
+  const pick=(()=>{try{return JSON.parse(localStorage.getItem('cc_soundpick')||'{}');}catch(e){return {};}})();
+  const st=document.createElement('style');st.textContent=`#slab{position:fixed;inset:0;z-index:50;overflow:auto;background:#FFF4EE;color:#5A2236;font:15px/1.35 Figtree,system-ui,sans-serif;padding:16px 16px 60px}
+  #slab h1{font:400 30px Shrikhand,Georgia,serif;color:#E1315B;margin:4px 0 4px}#slab p.i{margin:0 0 14px;opacity:.75}
+  .slr{background:#fff;border-radius:18px;padding:12px;margin:0 0 12px;box-shadow:0 2px 10px rgba(122,46,69,.08)}
+  .slh{display:flex;align-items:center;gap:10px;margin-bottom:8px}.slh img{width:48px;height:48px}.slh b{font-size:17px}.slh small{opacity:.6}
+  .slv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .slc{border:2px solid #F2DCE2;border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:5px}
+  .slc.on{border-color:#E1315B;background:#FFF0F4}.slc .n{font-weight:800}.slc .vv{font-size:12px;opacity:.6}
+  .slc button{font:700 13px Figtree,system-ui;border:0;border-radius:10px;padding:7px 4px;background:#F7E8EC;color:#5A2236;cursor:pointer}
+  .slc button.sel{background:#E1315B;color:#fff}.slc.on button.sel{background:#3BB273}
+  @media (max-width:620px){.slv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  #slbar{position:fixed;left:0;right:0;bottom:0;background:#5A2236;color:#fff;padding:10px 16px;font-weight:700;z-index:51}`;
+  document.head.appendChild(st);
+  const box=document.createElement('div');box.id='slab';
+  box.innerHTML='<h1>Klang-Labor</h1><p class="i">Pro Figur 4 Varianten. <b>A</b> ist der aktuelle Klang. Hör dir Hüpfen, Unfall, Wasser und Jingle an und tippe bei deinem Favoriten auf „Auswählen“. Die Wahl wird automatisch gespeichert.</p>';
+  const bar=document.createElement('div');bar.id='slbar';
+  const upd=()=>{bar.textContent='Ausgewählt: '+Object.keys(pick).length+' von '+SKINS.length+' Figuren';try{localStorage.setItem('cc_soundpick',JSON.stringify(pick));}catch(e){}};
+  for(const sk of SKINS){
+    const row=document.createElement('div');row.className='slr';
+    const cur=sk.snd?('aktuell: '+sk.snd.voice):'aktuell: Standard-Piep';
+    row.innerHTML='<div class="slh"><img alt=""><div><b></b><br><small></small></div></div><div class="slv"></div>';
+    row.querySelector('b').textContent=T(sk.name);row.querySelector('small').textContent=cur;
+    try{const u=skinIcon(sk);if(u)row.querySelector('img').src=u;}catch(e){}
+    const grid=row.querySelector('.slv');
+    for(let v=0;v<4;v++){
+      const c=(SL_CAND[sk.id]||[])[v-1];if(v>0&&!c)continue;
+      const card=document.createElement('div');card.className='slc'+(pick[sk.id]===v?' on':'');
+      card.innerHTML='<span class="n">'+'ABCD'[v]+'</span><span class="vv">'+(v===0?(sk.snd?sk.snd.voice:'Standard'):c[0])+'</span>';
+      for(const [w,lab] of [['hop','▶ Hüpfen'],['die','▶ Unfall'],['water','▶ Wasser'],['jingle','▶ Jingle']]){const b=document.createElement('button');b.textContent=lab;b.onclick=()=>slPlay(sk,v,w);card.appendChild(b);}
+      const sb=document.createElement('button');sb.className='sel';sb.textContent=pick[sk.id]===v?'✓ Gewählt':'Auswählen';
+      sb.onclick=()=>{pick[sk.id]=v;grid.querySelectorAll('.slc').forEach(x=>{x.classList.remove('on');x.querySelector('.sel').textContent='Auswählen';});card.classList.add('on');sb.textContent='✓ Gewählt';upd();};
+      card.appendChild(sb);grid.appendChild(card);
+    }
+    box.appendChild(row);
+  }
+  document.body.appendChild(box);document.body.appendChild(bar);upd();
+  window.__soundpick=()=>pick;
+});
+if(TEST&&/[?&]musiclab=1/.test(location.search))window.CrossingCandy.ready.then(()=>{
+  SLM=true;Music.stop();
+  const pick=(()=>{try{return JSON.parse(localStorage.getItem('cc_musicpick')||'{}');}catch(e){return {};}})();
+  const st=document.createElement('style');st.textContent=`#mlab{position:fixed;inset:0;z-index:50;overflow:auto;background:#F4F0FF;color:#3A2560;font:15px/1.35 Figtree,system-ui,sans-serif;padding:16px 16px 70px}
+  #mlab h1{font:400 30px Shrikhand,Georgia,serif;color:#7B5CFF;margin:4px 0}#mlab p.i{margin:0 0 14px;opacity:.75}
+  .mlr{background:#fff;border-radius:18px;padding:12px;margin:0 0 12px;box-shadow:0 2px 10px rgba(60,40,120,.08)}.mlr h2{margin:0 0 8px;font-size:18px}
+  .mlv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .mlc{border:2px solid #E4DCFA;border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px}.mlc.on{border-color:#7B5CFF;background:#F7F4FF}
+  .mlc .n{font-weight:800}.mlc .vv{font-size:12px;opacity:.65}
+  .mlc button{font:700 13px Figtree,system-ui;border:0;border-radius:10px;padding:8px 4px;background:#ECE6FF;color:#3A2560;cursor:pointer}
+  .mlc button.play.playing{background:#3BB273;color:#fff}.mlc button.sel{background:#7B5CFF;color:#fff}.mlc.on button.sel{background:#3BB273}
+  @media (max-width:620px){.mlv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  #mlbar{position:fixed;left:0;right:0;bottom:0;background:#3A2560;color:#fff;padding:10px 16px;font-weight:700;z-index:51;display:flex;gap:12px;align-items:center}
+  #mlbar button{font:700 13px Figtree;border:0;border-radius:10px;padding:7px 12px;background:#fff;color:#3A2560}`;
+  document.head.appendChild(st);
+  const NAMES=['Bonbon-Wiese','Eisland','Schoko-Vulkan','Lakritz-Weltall'],STY=[['A','aktuell'],['B','Spieluhr'],['C','Pop'],['D','Lo-Fi']];
+  const box=document.createElement('div');box.id='mlab';
+  box.innerHTML='<h1>Musik-Labor</h1><p class="i">Pro Welt 4 Varianten. Tippe auf „▶ Abspielen“ (läuft in Schleife), dann bei deinem Favoriten auf „Auswählen“. Gespeichert wird automatisch.</p>';
+  const bar=document.createElement('div');bar.id='mlbar';const info=document.createElement('span');const stop=document.createElement('button');stop.textContent='■ Stopp';
+  stop.onclick=()=>{Music.stop();box.querySelectorAll('.play').forEach(b=>{b.classList.remove('playing');b.textContent='▶ Abspielen';});};
+  bar.append(info,stop);
+  const upd=()=>{info.textContent='Ausgewählt: '+Object.keys(pick).length+' von 4 Welten';try{localStorage.setItem('cc_musicpick',JSON.stringify(pick));}catch(e){}};
+  NAMES.forEach((nm,wi)=>{
+    const row=document.createElement('div');row.className='mlr';row.innerHTML='<h2></h2><div class="mlv"></div>';row.querySelector('h2').textContent=nm;
+    const grid=row.querySelector('.mlv');
+    STY.forEach(([k,lab],v)=>{
+      const card=document.createElement('div');card.className='mlc'+(pick[wi]===v?' on':'');
+      card.innerHTML='<span class="n">'+k+'</span><span class="vv">'+lab+' · '+MUS_VAR[wi][v].bpm+' BPM</span>';
+      const pb=document.createElement('button');pb.className='play';pb.textContent='▶ Abspielen';
+      pb.onclick=()=>{unlockAudio();box.querySelectorAll('.play').forEach(b=>{b.classList.remove('playing');b.textContent='▶ Abspielen';});Music.start(MUS_VAR[wi][v]);pb.classList.add('playing');pb.textContent='♪ läuft';};
+      const sb=document.createElement('button');sb.className='sel';sb.textContent=pick[wi]===v?'✓ Gewählt':'Auswählen';
+      sb.onclick=()=>{pick[wi]=v;grid.querySelectorAll('.mlc').forEach(x=>{x.classList.remove('on');x.querySelector('.sel').textContent='Auswählen';});card.classList.add('on');sb.textContent='✓ Gewählt';upd();};
+      card.append(pb,sb);grid.appendChild(card);
+    });
+    box.appendChild(row);
+  });
+  document.body.append(box,bar);upd();
+  window.__musicpick=()=>pick;
+});
 if(TEST)window.__peek=(kind,x=1.25,z=-0.3)=>{const W=WX(0),g=new THREE.Group();scene.add(g);
   if(kind==='donut'){const d=makeDonut(W,0,1);d.position.set(x,0.62,z);g.add(d);}else obstacle(g,W,x,z,1,kind);return 'ok';};
 })();
